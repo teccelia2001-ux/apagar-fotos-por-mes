@@ -1,0 +1,28 @@
+# Rodar UMA vez só. Gera a chave de assinatura do app; o arquivo resultante
+# vira os secrets KEYSTORE_B64 e KEYSTORE_PASS e o artefato é apagado em seguida.
+name: Gerar chave de assinatura
+
+on:
+  workflow_dispatch:
+
+jobs:
+  chave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Gerar
+        run: |
+          mkdir saida
+          PASS=$(openssl rand -hex 16)
+          keytool -genkeypair -keystore release.jks -alias apagarfotos -keyalg RSA -keysize 2048 \
+            -validity 10000 -storepass "$PASS" -keypass "$PASS" -dname "CN=Apagar Fotos por Mes"
+          base64 -w0 release.jks > saida/keystore.b64
+          printf '%s' "$PASS" > saida/pass.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chave
+          path: saida/
+          retention-days: 1
