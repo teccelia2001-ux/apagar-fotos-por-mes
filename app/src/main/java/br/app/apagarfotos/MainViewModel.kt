@@ -40,8 +40,11 @@ val PERMISSOES: Array<String> = when {
 /** Android 11+ tem lixeira e pede confirmação do sistema antes de apagar. */
 val TEM_LIXEIRA = Build.VERSION.SDK_INT >= 30
 
-/** Quantos arquivos vão em cada pedido de confirmação do Android. */
-private const val LOTE = 1000
+/**
+ * Máximo de arquivos numa única confirmação do Android. A seleção inteira vai num pedido só;
+ * só passa disso se for maior que o limite de dados que o Android aceita numa chamada.
+ */
+const val LOTE = 3000
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val ctx: Application get() = getApplication()
@@ -56,6 +59,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var mesesMarcados by mutableStateOf(setOf<Int>())
     var manter by mutableStateOf(setOf<Long>())
     var marcadosLixeira by mutableStateOf(setOf<Long>())
+    /** true = manda para a lixeira; false = apaga de vez. */
+    var usarLixeira by mutableStateOf(true)
 
     var mesAberto by mutableStateOf<Int?>(null)
     var lixeiraAberta by mutableStateOf(false)

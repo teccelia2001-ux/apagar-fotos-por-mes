@@ -204,7 +204,6 @@ fun TelaPermissao(onPedir: () -> Unit, onConfig: () -> Unit) {
 @Composable
 fun TelaMeses(vm: MainViewModel) {
     val ctx = LocalContext.current
-    var confirmar by remember { mutableStateOf(false) }
     val meses = vm.meses
     val paraApagar = vm.itensParaApagar(vm.mesesMarcados)
 
@@ -225,13 +224,7 @@ fun TelaMeses(vm: MainViewModel) {
         bottomBar = {
             if (paraApagar.isNotEmpty()) {
                 val n = vm.mesesMarcados.count { k -> meses.any { it.chave == k } }
-                BarraAcao(
-                    titulo = resumoItens(ctx, paraApagar),
-                    detalhe = qtd(n, "mês marcado", "meses marcados"),
-                    botao = "Apagar",
-                    habilitado = !vm.ocupado,
-                    onClick = { confirmar = true },
-                )
+                BarraApagar(vm, paraApagar, qtd(n, "mês marcado", "meses marcados"))
             }
         },
     ) { pad ->
@@ -266,13 +259,6 @@ fun TelaMeses(vm: MainViewModel) {
                     }
                 }
             }
-        }
-    }
-
-    if (confirmar) {
-        DialogoApagar(paraApagar, onCancelar = { confirmar = false }) { acao ->
-            confirmar = false
-            vm.executar(paraApagar, acao)
         }
     }
 }
@@ -383,7 +369,6 @@ fun TelaMes(vm: MainViewModel) {
         return
     }
     BackHandler { vm.mesAberto = null }
-    var confirmar by remember { mutableStateOf(false) }
     val paraApagar = mes.itens.filter { it.id !in vm.manter }
 
     Scaffold(
@@ -407,13 +392,7 @@ fun TelaMes(vm: MainViewModel) {
         },
         bottomBar = {
             if (paraApagar.isNotEmpty()) {
-                BarraAcao(
-                    titulo = resumoItens(ctx, paraApagar),
-                    detalhe = "${paraApagar.size} de ${mes.itens.size} serão apagados",
-                    botao = "Apagar",
-                    habilitado = !vm.ocupado,
-                    onClick = { confirmar = true },
-                )
+                BarraApagar(vm, paraApagar, "${paraApagar.size} de ${mes.itens.size} serão apagados")
             }
         },
     ) { pad ->
@@ -460,13 +439,6 @@ fun TelaMes(vm: MainViewModel) {
             }
         }
     }
-
-    if (confirmar) {
-        DialogoApagar(paraApagar, onCancelar = { confirmar = false }) { acao ->
-            confirmar = false
-            vm.executar(paraApagar, acao)
-        }
-    }
 }
 
 // ---------- Lixeira (Android 11+) ----------
@@ -477,7 +449,6 @@ fun TelaLixeira(vm: MainViewModel) {
     BackHandler { vm.lixeiraAberta = false }
     val itens = vm.naLixeira
     val marcados = itens.filter { it.id in vm.marcadosLixeira }
-    var apagarDeVez by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -503,7 +474,7 @@ fun TelaLixeira(vm: MainViewModel) {
                                 modifier = Modifier.weight(1f),
                             ) { Text("Restaurar") }
                             Button(
-                                onClick = { apagarDeVez = true },
+                                onClick = { vm.executar(marcados, Acao.APAGAR) },
                                 enabled = !vm.ocupado,
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = VERMELHO, contentColor = Color.White),
@@ -552,42 +523,70 @@ fun TelaLixeira(vm: MainViewModel) {
             }
         }
     }
-
-    if (apagarDeVez) {
-        AlertDialog(
-            onDismissRequest = { apagarDeVez = false },
-            icon = { Icon(Icons.Default.Delete, null, tint = VERMELHO) },
-            title = { Text("Apagar de vez ${qtd(marcados.size, "item", "itens")}?") },
-            text = { Text("${resumoItens(ctx, marcados)}.\n\nIsto NÃO tem como desfazer.") },
-            confirmButton = {
-                TextButton(onClick = { apagarDeVez = false; vm.executar(marcados, Acao.APAGAR) }) {
-                    Text("Apagar de vez", color = VERMELHO, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = { TextButton(onClick = { apagarDeVez = false }) { Text("Cancelar") } },
-        )
-    }
 }
 
 // ---------- Peças reutilizadas ----------
 
+/**
+ * Barra de baixo com o resumo da seleção e o botão Apagar.
+ * No Android 11+ o botão já abre a confirmação única do Android para a seleção inteira;
+ * no Android 10 ou anterior (sem confirmação do sistema) abre a confirmação do próprio app.
+ */
 @Composable
-fun BarraAcao(titulo: String, detalhe: String, botao: String, habilitado: Boolean, onClick: () -> Unit) {
+fun BarraApagar(vm: MainViewModel, itens: List<MediaItem>, detalhe: String) {
+    val ctx = LocalContext.current
+    var confirmarApp by remember { mutableStateOf(false) }
     Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(titulo, fontWeight = FontWeight.Bold)
-                Text(detalhe, style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(resumoItens(ctx, itens), fontWeight = FontWeight.Bold)
+                    Text(detalhe, style = MaterialTheme.typography.bodySmall)
+                }
+                Button(
+                    onClick = {
+                        if (TEM_LIXEIRA) {
+                            vm.executar(itens, if (vm.usarLixeira) Acao.LIXEIRA else Acao.APAGAR)
+                        } else {
+                            confirmarApp = true
+                        }
+                    },
+                    enabled = !vm.ocupado,
+                    colors = ButtonDefaults.buttonColors(containerColor = VERMELHO, contentColor = Color.White),
+                ) {
+                    Icon(Icons.Default.Delete, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Apagar")
+                }
             }
-            Button(
-                onClick = onClick,
-                enabled = habilitado,
-                colors = ButtonDefaults.buttonColors(containerColor = VERMELHO, contentColor = Color.White),
-            ) {
-                Icon(Icons.Default.Delete, null)
-                Spacer(Modifier.width(6.dp))
-                Text(botao)
+            if (TEM_LIXEIRA) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.usarLixeira = !vm.usarLixeira },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (vm.usarLixeira) "Mandar para a lixeira (dá para restaurar em 30 dias)"
+                        else "Apagar de vez (não tem como desfazer)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (vm.usarLixeira) MaterialTheme.colorScheme.onSurfaceVariant else VERMELHO,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = vm.usarLixeira, onCheckedChange = { vm.usarLixeira = it })
+                }
+                if (itens.size > LOTE) {
+                    val vezes = (itens.size + LOTE - 1) / LOTE
+                    Text(
+                        "São muitos arquivos: o Android vai pedir $vezes confirmações (até $LOTE por vez).",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
+        }
+    }
+    if (confirmarApp) {
+        DialogoApagar(itens, onCancelar = { confirmarApp = false }) { acao ->
+            confirmarApp = false
+            vm.executar(itens, acao)
         }
     }
 }

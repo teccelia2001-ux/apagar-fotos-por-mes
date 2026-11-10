@@ -83,10 +83,13 @@ object Galeria {
     @RequiresApi(30)
     fun pedido(ctx: Context, uris: List<Uri>, acao: Acao): IntentSender {
         val cr = ctx.contentResolver
+        // Uri em forma de texto ocupa menos espaço na chamada ao Android,
+        // o que permite mais arquivos numa única confirmação.
+        val compactas = uris.map { Uri.parse(it.toString()) }
         return when (acao) {
-            Acao.LIXEIRA -> MediaStore.createTrashRequest(cr, uris, true)
-            Acao.RESTAURAR -> MediaStore.createTrashRequest(cr, uris, false)
-            Acao.APAGAR -> MediaStore.createDeleteRequest(cr, uris)
+            Acao.LIXEIRA -> MediaStore.createTrashRequest(cr, compactas, true)
+            Acao.RESTAURAR -> MediaStore.createTrashRequest(cr, compactas, false)
+            Acao.APAGAR -> MediaStore.createDeleteRequest(cr, compactas)
         }.intentSender
     }
 
